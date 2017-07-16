@@ -24,7 +24,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * 负责管理和访问 RecyclerView 的子视图
  * Helper class to manage children.
+ * 这个类包装了RecyclerView并且能够隐藏一些子View，这里会提供俩个set方法，这里是复制了ViewGroup里面的一些常规方法
+ * 比如 getChildAt getChildCount 等，这些方法会忽略被hide的子View。
+ * 当RecyclerView需要直接访问他的子类的时候会，他可以调用 getUnfilteredChildCount getUnfilteredChildAt 等方法
  * <p>
  * It wraps a RecyclerView and adds ability to hide some children. There are two sets of methods
  * provided by this class. <b>Regular</b> methods are the ones that replicate ViewGroup methods
@@ -32,6 +36,35 @@ import java.util.List;
  * <p>
  * When RecyclerView needs direct access to the view group children, it can call unfiltered
  * methods like get getUnfilteredChildCount or getUnfilteredChildAt.
+ *
+ * RecyclerView布局的时候还，需要考虑一种情况：当进行动画的时候，ViewGroup上的View不是立马就被remove的(动画结束后才会被真正的移除)，
+ * 而data里面的数据是里面就被移除的，这就造成了ViewGroup和data的数据是不一致的，在RecyclerView中，被称作为AnimatingView，
+ * 显然这种不一致是会对RecyclerView造成影响，在真正布局的时候，RecyclerView的LayoutManager在进行布局时是不会也不能考虑上面的AnimatingView的
+ * 但是某些场景下，RecyclerView又需要能够感知到这些AnimatingView(比如View复用)，这个时候就会造成下面的情况：
+ *     ViewGroup认为所有的childView是可以见的
+ *     Data认为，只有能够映射到Data的ChildView才是可见的
+ * 为了支持上面的两种情况，就需要进行额外的处理
+ * recyclerView将ChildView管理职责全权委托给了ChildHelper，所有关于ChildView的操作都要通过ChildHelper来间接进行,
+ * ChildHelper成为了一个ChildView操作的中间层，getChildCount/getChildAt等函数经由ChildHelper的拦截处理再下发给RecyclerView的对应函数，
+ * 其参数或者返回结果会根据实际的ChildView信息进行改写(可以发现，各个方法对index的处理，都是会先经过getOffset这个方法，它拦截了真正的index，
+ * 返回的是根据mBucket映射的各个状态的View的index)，所以，ChildHelper只是一个中间处理器，真正涉及到具体的ChildView操作还需要落地到RecyclerView
+ *
+ * ChildHelper包含了两套ChildView序列，一套序列只包含了可见的ChildView(mCallback中的序列)，另一套则包含了所有ChildView(mBucket所维护)
+ * 举个例子：RecyclerView中有 A,B,C,D,E,F 6个ChildView，其中 B，C，E 是不可见的, 这里就存在两个ChildView序列:
+ *     [1] 所有ChildView: A, B, C, D, E, F
+ *     [2] 可见ChildView: A, D, F.
+ *
+ * 对[1]getChildCount是6, 对[2]getChildCount是3.
+ * 对[1]getChildAt(1)得到的是B, 对[2]getChildAt(1)得到的是D
+ *
+ * 再看一下这里面的addView的方法，该方法只针对可见ChildView, 如果指定了要add的index(在序列中的位置),
+ * 那么会根据真实ChildView的情况，对index进行偏移(getOffset函数非常关键，会基于Bucket算出合适的偏移结果)，算出一个在真实ChildView序列中的index，
+ * 将这个新的index作为View在ViewGroup中的index进行添加，在将View按照新的index进行添加后，Bucket中的映射关系也会进行相应的insert
+ * 举个例子：在[2]的index 2位置插入G(addView(G, 2)), 那么两套序列会变为:
+ *     [1] A,B,C,D,G,E,F
+ *     [2] A,D,G,F
+ * addView传输的index是2, 经过ChildHelper转化，最后偏移为4插入到了RecyclerView中。
+ *
  */
 class ChildHelper {
 
@@ -41,6 +74,8 @@ class ChildHelper {
 
     final Callback mCallback;
 
+    // 可以理解为一个List<Boolean>,这个变量是维护的一个映射，ChildView的位置是key，value则是否是特殊的View
+    // 将普通ChildView看作是可见的，特殊的View看作是不可见的
     final Bucket mBucket;
 
     final List<View> mHiddenViews;
@@ -52,6 +87,7 @@ class ChildHelper {
     }
 
     /**
+     * 标记View为Hidden,这里是把对应的View放入到 mHiddenViews
      * Marks a child view as hidden
      *
      * @param child  View to hide.
@@ -62,6 +98,7 @@ class ChildHelper {
     }
 
     /**
+     * 去除hidden的标记，从mHiddenViews移除
      * Unmarks a child view as hidden.
      *
      * @param child  View to hide.
@@ -76,6 +113,7 @@ class ChildHelper {
     }
 
     /**
+     * addView
      * Adds a view to the ViewGroup
      *
      * @param child  View to add.
@@ -86,6 +124,8 @@ class ChildHelper {
     }
 
     /**
+     * 在指定的index添加View,这里先要处理对应的mBucket，让后让真正addView的操作是在mCallBack中进行的
+     * 也就是RecyclerView当中进行真正的addView，这里处理部分逻辑
      * Add a view to the ViewGroup at an index
      *
      * @param child  View to add.
@@ -132,6 +172,7 @@ class ChildHelper {
     }
 
     /**
+     * 移除View，移除mBucket然后移除RecyclerView中的View
      * Removes the provided View from underlying RecyclerView.
      *
      * @param view The view to remove.
@@ -151,6 +192,7 @@ class ChildHelper {
     }
 
     /**
+     * 移除指定位置的View
      * Removes the view at the provided index from RecyclerView.
      *
      * @param index Index of the child from the regular perspective (excluding hidden views).
@@ -244,6 +286,7 @@ class ChildHelper {
     }
 
     /**
+     * 获取可见的View的数量
      * Returns the number of children that are not hidden.
      *
      * @return Number of children that are not hidden.
@@ -254,6 +297,7 @@ class ChildHelper {
     }
 
     /**
+     * 获取所有的child的数量
      * Returns the total number of children.
      *
      * @return The total number of children including the hidden views.
@@ -264,6 +308,7 @@ class ChildHelper {
     }
 
     /**
+     * 获取真正的index，childHelper是不会处理这里index的
      * Returns a child by ViewGroup offset. ChildHelper won't offset this index.
      *
      * @param index ViewGroup index of the child to return.
@@ -390,6 +435,7 @@ class ChildHelper {
     }
 
     /**
+     * 实现了类似List<Boolean>的数据结构，从而达到减少内存占用的目的。
      * Bitset implementation that provides methods to offset indices.
      */
     static class Bucket {
@@ -402,6 +448,14 @@ class ChildHelper {
 
         Bucket next;
 
+        /**
+         * 设置对应index位的bit为1(index从0开始)
+           ChildHelper.Bucket bucket = new ChildHelper.Bucket();
+           bucket.set(3);
+           Log.i(TAG,bucket.toString());//1000
+
+         * @param index
+         */
         void set(int index) {
             if (index >= BITS_PER_WORD) {
                 ensureNext();
@@ -417,6 +471,10 @@ class ChildHelper {
             }
         }
 
+        /**
+         * 设置index对应的bit为0
+         * @param index
+         */
         void clear(int index) {
             if (index >= BITS_PER_WORD) {
                 if (next != null) {
@@ -428,6 +486,11 @@ class ChildHelper {
 
         }
 
+        /**
+         * 判断index对应的bit是否为1，如果为1，返回true，否则返回false。
+         * @param index
+         * @return
+         */
         boolean get(int index) {
             if (index >= BITS_PER_WORD) {
                 ensureNext();
@@ -437,6 +500,9 @@ class ChildHelper {
             }
         }
 
+        /**
+         * 重置，所有数据置为0
+         */
         void reset() {
             mData = 0;
             if (next != null) {
@@ -444,6 +510,11 @@ class ChildHelper {
             }
         }
 
+        /**
+         * 在index位置插入指定bit：value为true插入1，value为false插入0
+         * @param index
+         * @param value
+         */
         void insert(int index, boolean value) {
             if (index >= BITS_PER_WORD) {
                 ensureNext();
@@ -466,6 +537,11 @@ class ChildHelper {
             }
         }
 
+        /**
+         * 移除index对应位置的bit。低于index的所有数据保持不变，高于index的数据右移一位。
+         * @param index
+         * @return
+         */
         boolean remove(int index) {
             if (index >= BITS_PER_WORD) {
                 ensureNext();
@@ -489,6 +565,11 @@ class ChildHelper {
             }
         }
 
+        /**
+         * 计算比index小的所有位数上bit为1的总个数。
+         * @param index
+         * @return
+         */
         int countOnesBefore(int index) {
             if (next == null) {
                 if (index >= BITS_PER_WORD) {

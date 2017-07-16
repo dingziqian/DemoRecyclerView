@@ -26,6 +26,10 @@ import java.util.List;
 import static ding.widget.RecyclerView.ViewHolder;
 
 /**
+ * 负责处理 Adapter 里的数据集发生变化时的预处理
+ *  Update行为记录/整合/分发系统(时序魔法师，扮演了RecylerView和LayoutManager之间的Position调停者)，
+ *  让RecyclerView可以支持真正的局部更新，不必像ListView一样牵一发动全身，Update行为整合/分发功能是Prelayout机制实现的基础，
+ *  进而推动了Predictive动画模式的实现。Update行为这次也被模型对象化了，带来的好处就是对Update的处理粒度从整体细化到了某个item。
  * Helper class that can enqueue and process adapter update operations.
  * <p>
  * To support animations, RecyclerView presents an older version the Adapter to best represent

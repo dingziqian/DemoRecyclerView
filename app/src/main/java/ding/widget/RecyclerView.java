@@ -420,10 +420,10 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
     private int mInitialTouchY;
     private int mLastTouchX;
     private int mLastTouchY;
-    private int mTouchSlop;
+    private int mTouchSlop; // 滑动事件的最小像素距离
     private OnFlingListener mOnFlingListener;
-    private final int mMinFlingVelocity;
-    private final int mMaxFlingVelocity;
+    private final int mMinFlingVelocity; // 最小飞速滚动时每秒移动的距离，即最小fling速度。
+    private final int mMaxFlingVelocity; // 最大fling速度
     // This value is used when handling generic motion events.
     private float mScrollFactor = Float.MIN_VALUE;
     private boolean mPreserveFocusAfterLayout = true;
@@ -530,6 +530,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
 
     public RecyclerView(Context context, @Nullable AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
+        //初始化ClipToPadding的值，如果ture，则允许有child绘制在parent的padding内，反之，则不允许
         if (attrs != null) {
             TypedArray a = context.obtainStyledAttributes(attrs, CLIP_TO_PADDING_ATTR, defStyle, 0);
             mClipToPadding = a.getBoolean(0, true);
@@ -537,17 +538,24 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         } else {
             mClipToPadding = true;
         }
+        // 设置容器可滚动，在弹出输入法框的时候可以resize
         setScrollContainer(true);
+        // 设置视图Focusable
         setFocusableInTouchMode(true);
 
+        // 初始化ViewCofiguration
         final ViewConfiguration vc = ViewConfiguration.get(context);
         mTouchSlop = vc.getScaledTouchSlop();
         mMinFlingVelocity = vc.getScaledMinimumFlingVelocity();
         mMaxFlingVelocity = vc.getScaledMaximumFlingVelocity();
+        // 设置滑动超过边界时是否进行OverScroll绘制
         setWillNotDraw(getOverScrollMode() == View.OVER_SCROLL_NEVER);
 
+        // 为Item动画设置内部的回调接口，主要是用来在动画结束的时候做一些动作
         mItemAnimator.setListener(mItemAnimatorListener);
+        // 初始化AdapterHelper
         initAdapterManager();
+        // 初始化ChildHelper
         initChildrenHelper();
         // If not explicitly specified this view is important for accessibility.
         if (ViewCompat.getImportantForAccessibility(this)
@@ -557,6 +565,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
         mAccessibilityManager = (AccessibilityManager) getContext()
                 .getSystemService(Context.ACCESSIBILITY_SERVICE);
+        // 无障碍服务
         setAccessibilityDelegateCompat(new RecyclerViewAccessibilityDelegate(this));
         // Create the layoutManager if specified.
 
@@ -564,7 +573,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
 
         if (attrs != null) {
             int defStyleRes = 0;
-
+            // 属性的获取
             TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.RecyclerView,
                     defStyle, defStyleRes);
             String layoutManagerName = a.getString(R.styleable.RecyclerView_layoutManager);
@@ -609,6 +618,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
     }
 
     /**
+     * 创建一个LayoutManager，根据反射来获取对应的实例
      * Instantiate and set a LayoutManager, if specified in the attributes.
      */
     private void createLayoutManager(Context context, String className, AttributeSet attrs,
@@ -674,15 +684,18 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         return RecyclerView.class.getPackage().getName() + '.' + className;
     }
 
+    /**
+     * 初始化ChildHelper
+     */
     private void initChildrenHelper() {
         mChildHelper = new ChildHelper(new ChildHelper.Callback() {
             @Override
-            public int getChildCount() {
+            public int getChildCount() { // 获取child的数量
                 return RecyclerView.this.getChildCount();
             }
 
             @Override
-            public void addView(View child, int index) {
+            public void addView(View child, int index) { // 添加View
                 RecyclerView.this.addView(child, index);
                 dispatchChildAttached(child);
             }
@@ -774,6 +787,9 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         });
     }
 
+    /**
+     * 初始化AdapterHelper
+     */
     void initAdapterManager() {
         mAdapterHelper = new AdapterHelper(new Callback() {
             @Override
@@ -1097,8 +1113,10 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
     }
 
     /**
+     * 设置LayoutManager
      * Set the {@link LayoutManager} that this RecyclerView will use.
      *
+     * 与listView和GridView的adapter模式不一样，RecyclerView允许使用者提供自定义的视图，这些视图通过LayoutManager来管理
      * <p>In contrast to other adapter-backed views such as {@link android.widget.ListView}
      * or {@link android.widget.GridView}, RecyclerView allows client code to provide custom
      * layout arrangements for child views. These arrangements are controlled by the
@@ -1112,11 +1130,13 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         if (layout == mLayout) {
             return;
         }
+        // 停止滚动
         stopScroll();
         // TODO We should do this switch a dispatchLayout pass and animate children. There is a good
         // chance that LayoutManagers will re-use views.
-        if (mLayout != null) {
+        if (mLayout != null) { // 复用
             // end all running animations
+            // 终止动画
             if (mItemAnimator != null) {
                 mItemAnimator.endAnimations();
             }
@@ -1329,6 +1349,10 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         return mScrollState;
     }
 
+    /**
+     * 设置滚动状态，会回调各个监听这
+     * @param state
+     */
     void setScrollState(int state) {
         if (state == mScrollState) {
             return;
@@ -1338,7 +1362,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
                     new Exception());
         }
         mScrollState = state;
-        if (state != SCROLL_STATE_SETTLING) {
+        if (state != SCROLL_STATE_SETTLING) { // 停止滚动
             stopScrollersInternal();
         }
         dispatchOnScrollStateChanged(state);
@@ -2006,15 +2030,18 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
     }
 
     /**
+     * 停止任何滚动，比如smoothScrollBy  fling  touch 产生的滚动
      * Stop any current scroll in progress, such as one started by
      * {@link #smoothScrollBy(int, int)}, {@link #fling(int, int)} or a touch-initiated fling.
      */
     public void stopScroll() {
+        // 设置滚动的状态
         setScrollState(SCROLL_STATE_IDLE);
         stopScrollersInternal();
     }
 
     /**
+     * 内部停止滚动，首先停止自己，其次通知LayoutManager
      * Similar to {@link #stopScroll()} but does not set the state.
      */
     private void stopScrollersInternal() {
@@ -4403,6 +4430,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
     }
 
     /**
+     * 滚动改变的回调，这个方法可以留个子类去实现
      * Called when the scroll state of this RecyclerView changes. Subclasses should use this
      * method to respond to state changes instead of an explicit listener.
      *
@@ -4416,10 +4444,16 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         // Do nothing
     }
 
+    /**
+     * 下发滚动事件，
+     * 首先通知layoutManager
+     * 回调onScrollStateChanged 子类可以自己处理
+     * 监听 mScrollListener
+     */
     void dispatchOnScrollStateChanged(int state) {
         // Let the LayoutManager go first; this allows it to bring any properties into
         // a consistent state before the RecyclerView subclass responds.
-        if (mLayout != null) {
+        if (mLayout != null) { // 通知LayoutManager
             mLayout.onScrollStateChanged(state);
         }
 
@@ -4428,7 +4462,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         onScrollStateChanged(state);
 
         // Listeners go last. All other internal state is consistent by this point.
-        if (mScrollListener != null) {
+        if (mScrollListener != null) { // 监听的回调
             mScrollListener.onScrollStateChanged(this, state);
         }
         if (mScrollListeners != null) {
@@ -5439,6 +5473,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
 
         /**
+         * 回收一个detached的Veiw，
          * Recycle a detached view. The specified view will be added to a pool of views
          * for later rebinding and reuse.
          *
@@ -7824,6 +7859,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
 
         /**
+         * 移除子View，并且将View放入缓存池中
          * Remove a child view and recycle it using the given Recycler.
          *
          * @param index Index of child to remove and recycle
@@ -9069,6 +9105,9 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
 
         }
 
+        /**
+         * 通知滚动
+         */
         void stopSmoothScroller() {
             if (mSmoothScroller != null) {
                 mSmoothScroller.stop();
@@ -9082,6 +9121,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
 
         /**
+         * 滚动状态发生变化
          * RecyclerView calls this method to notify LayoutManager that scroll state has changed.
          *
          * @param state The new scroll state for RecyclerView
@@ -9090,6 +9130,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
 
         /**
+         *
          * Removes all views and recycles them using the given recycler.
          * <p>
          * If you want to clean cached views as well, you should call {@link Recycler#clear()} too.
@@ -9469,6 +9510,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
      */
     public static abstract class ItemDecoration {
         /**
+         * itemView绘制之前绘制，通常这部分UI会被itemView盖住
          * Draw any appropriate decorations into the Canvas supplied to the RecyclerView.
          * Any content drawn by this method will be drawn before the item views are drawn,
          * and will thus appear underneath the views.
@@ -9490,6 +9532,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
 
         /**
+         * itemView绘制之后绘制，这部分UI盖在itemView上面
          * Draw any appropriate decorations into the Canvas supplied to the RecyclerView.
          * Any content drawn by this method will be drawn after the item views are drawn
          * and will thus appear over the views.
@@ -9512,6 +9555,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
 
 
         /**
+         * 设置itemView上下左右的间距
          * @deprecated
          * Use {@link #getItemOffsets(Rect, View, RecyclerView, State)}
          */
@@ -9852,6 +9896,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
 
         // If non-null, view is currently considered scrap and may be reused for other data by the
         // scrap container.
+        // //若非空，表明当前ViewHolder对应的itemView可以复用
         private Recycler mScrapContainer = null;
         // Keeps whether this ViewHolder lives in Change scrap or Attached scrap
         private boolean mInChangeScrap = false;
