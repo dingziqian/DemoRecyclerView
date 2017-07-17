@@ -996,12 +996,14 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
      */
     private void setAdapterInternal(Adapter adapter, boolean compatibleWithPrevious,
             boolean removeAndRecycleViews) {
+        // //注销监听者，也就是RecyclerView的一个内部类实例
         if (mAdapter != null) {
             mAdapter.unregisterAdapterDataObserver(mObserver);
             mAdapter.onDetachedFromRecyclerView(this);
         }
         if (!compatibleWithPrevious || removeAndRecycleViews) {
             // end all running animations
+            // 停止动画
             if (mItemAnimator != null) {
                 mItemAnimator.endAnimations();
             }
@@ -1009,6 +1011,9 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
             // recyclerView.children. This may not be true if item animator's end does not work as
             // expected. (e.g. not release children instantly). It is safer to use mLayout's child
             // count.
+            // 由于动画结束，mLayout.hildren应该等于recyclerView.children。
+            // 如果动画的结束没有按预期执行(例如，不能立即释放子VIew)，此处的条件就不成立了，此时使用mLayout的child count 更安全。
+            // 清空所有View，包括已添加的和Recycler中的
             if (mLayout != null) {
                 mLayout.removeAndRecycleAllViews(mRecycler);
                 mLayout.removeAndRecycleScrapInt(mRecycler);
@@ -1016,13 +1021,16 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
             // we should clear it here before adapters are swapped to ensure correct callbacks.
             mRecycler.clear();
         }
+        // 将AdapterHelper中数据清空
         mAdapterHelper.reset();
         final Adapter oldAdapter = mAdapter;
         mAdapter = adapter;
+        // 注册监听者
         if (adapter != null) {
             adapter.registerAdapterDataObserver(mObserver);
             adapter.onAttachedToRecyclerView(this);
         }
+        // 回调
         if (mLayout != null) {
             mLayout.onAdapterChanged(oldAdapter, mAdapter);
         }
@@ -1140,9 +1148,10 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
             if (mItemAnimator != null) {
                 mItemAnimator.endAnimations();
             }
+            // 移除和复用所有的View
             mLayout.removeAndRecycleAllViews(mRecycler);
             mLayout.removeAndRecycleScrapInt(mRecycler);
-            mRecycler.clear();
+            mRecycler.clear(); // 清除所有的缓存
 
             if (mIsAttached) {
                 mLayout.dispatchDetachedFromWindow(this, mRecycler);
@@ -2920,17 +2929,17 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
 
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
-        if (mLayout == null) {
+        if (mLayout == null) { // 还没有设置LayoutManager的时候，执行自己的onMeasure方法
             defaultOnMeasure(widthSpec, heightSpec);
             return;
         }
-        if (mLayout.mAutoMeasure) {
+        if (mLayout.mAutoMeasure) { // 自动测量模式
             final int widthMode = MeasureSpec.getMode(widthSpec);
             final int heightMode = MeasureSpec.getMode(heightSpec);
             final boolean skipMeasure = widthMode == MeasureSpec.EXACTLY
                     && heightMode == MeasureSpec.EXACTLY;
             mLayout.onMeasure(mRecycler, mState, widthSpec, heightSpec);
-            if (skipMeasure || mAdapter == null) {
+            if (skipMeasure || mAdapter == null) { // 如果宽度和高度都确定的情况下，就直接调用defaultOnMeasure
                 return;
             }
             if (mState.mLayoutStep == State.STEP_START) {
@@ -2990,6 +2999,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
     }
 
     /**
+     * onMeasure被调用，但是 layout manager 没有被set，这个方法会被调用
      * Used when onMeasure is called before layout manager is set
      */
     void defaultOnMeasure(int widthSpec, int heightSpec) {
@@ -3311,6 +3321,12 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
      * - decide which animation should run
      * - save information about current views
      * - If necessary, run predictive layout and save its information
+     *
+     * - 处理adapter的更新
+     * - 决定执行那个动画
+     * - 保存当前视图的信息
+     * - 如果必要的话进行预布局和保存这些信息
+     *
      */
     private void dispatchLayoutStep1() {
         mState.assertLayoutStep(State.STEP_START);
@@ -3602,6 +3618,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
 
     @Override
     protected void removeDetachedView(View child, boolean animate) {
+        // 清除ViewHolder上的标记，并且发出通知
         ViewHolder vh = getChildViewHolderInt(child);
         if (vh != null) {
             if (vh.isTmpDetached()) {
@@ -3680,6 +3697,9 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
     }
 
+    /**
+     * 标记ItemDecor为dirty
+     */
     void markItemDecorInsetsDirty() {
         final int childCount = mChildHelper.getUnfilteredChildCount();
         for (int i = 0; i < childCount; i++) {
@@ -3956,6 +3976,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
     }
 
     /**
+     * 将所有已知视图标记为无效。 用于回应“所有的已经改变”的数据变化事件。
      * Mark all known views as invalid. Used in response to a, "the whole world might have changed"
      * data change event.
      */
@@ -4312,6 +4333,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
     }
 
     /**
+     * 当item view被RecyclerView detached 的时候被调用
      * Called when an item view is detached from this RecyclerView.
      *
      * <p>Subclasses of RecyclerView may want to perform extra bookkeeping or modifications
@@ -5105,6 +5127,9 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
             updateViewCacheSize();
         }
 
+        /**
+         * 更新缓存大小
+         */
         void updateViewCacheSize() {
             int extraCache = 0;
             if (mLayout != null && ALLOW_PREFETCHING) {
@@ -5880,6 +5905,12 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
             if (DEBUG) Log.d(TAG, "dispatchViewRecycled: " + holder);
         }
 
+        /**
+         * adapter发生变化的监听
+         * @param oldAdapter
+         * @param newAdapter
+         * @param compatibleWithPrevious
+         */
         void onAdapterChanged(Adapter oldAdapter, Adapter newAdapter,
                 boolean compatibleWithPrevious) {
             clear();
@@ -6007,6 +6038,9 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
             }
         }
 
+        /**
+         * 标记已知的View为无效
+         */
         void markKnownViewsInvalid() {
             if (mAdapter != null && mAdapter.hasStableIds()) {
                 final int cachedCount = mCachedViews.size();
@@ -6436,6 +6470,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
 
         /**
+         * 注销个对data的观察者
          * Unregister an observer currently listening for data changes.
          *
          * <p>The unregistered observer will no longer receive events about changes
@@ -6680,13 +6715,17 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
     }
 
+    /**
+     * 下发child被detached的通知
+     * @param child
+     */
     void dispatchChildDetached(View child) {
         final ViewHolder viewHolder = getChildViewHolderInt(child);
-        onChildDetachedFromWindow(child);
-        if (mAdapter != null && viewHolder != null) {
+        onChildDetachedFromWindow(child); // 通知RecclerView
+        if (mAdapter != null && viewHolder != null) { // 通知adapter
             mAdapter.onViewDetachedFromWindow(viewHolder);
         }
-        if (mOnChildAttachStateListeners != null) {
+        if (mOnChildAttachStateListeners != null) { // 通知监听者
             final int cnt = mOnChildAttachStateListeners.size();
             for (int i = cnt - 1; i >= 0; i--) {
                 mOnChildAttachStateListeners.get(i).onChildViewDetachedFromWindow(child);
@@ -6760,12 +6799,12 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         private int mWidth, mHeight;
 
         void setRecyclerView(RecyclerView recyclerView) {
-            if (recyclerView == null) {
+            if (recyclerView == null) { // 清除View
                 mRecyclerView = null;
                 mChildHelper = null;
                 mWidth = 0;
                 mHeight = 0;
-            } else {
+            } else { // 设置对应的recyclerView
                 mRecyclerView = recyclerView;
                 mChildHelper = recyclerView.mChildHelper;
                 mWidth = recyclerView.getWidth();
@@ -6885,6 +6924,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
 
         /**
+         * 根据测量值和模式返回最适合的尺寸大小。
          * Chooses a size from the given specs and parameters that is closest to the desired size
          * and also complies with the spec.
          *
@@ -7882,6 +7922,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
 
         /**
+         *
          * Return the child view at the given index
          * @param index Index of child to return
          * @return Child view at index
@@ -8173,6 +8214,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
                 // To avoid this, we mark it as not recycleable before calling the item animator.
                 // Since removeDetachedView calls a user API, a common mistake (ending animations on
                 // the view) may recycle it too, so we guard it before we call user APIs.
+                // 这主要是为了处理动画
                 vh.setIsRecyclable(false);
                 if (vh.isTmpDetached()) {
                     mRecyclerView.removeDetachedView(scrap, false);
@@ -9130,7 +9172,8 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         }
 
         /**
-         *
+         * 移除所有的view并且回收到Recycler当中，如果你想要清除缓存当中的View，你可以调用Recycler.clear()
+         * 如果一个View被标记为 ignore 他将不会被移除也不会被回收
          * Removes all views and recycles them using the given recycler.
          * <p>
          * If you want to clean cached views as well, you should call {@link Recycler#clear()} too.
@@ -9145,7 +9188,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         public void removeAndRecycleAllViews(Recycler recycler) {
             for (int i = getChildCount() - 1; i >= 0; i--) {
                 final View view = getChildAt(i);
-                if (!getChildViewHolderInt(view).shouldIgnore()) {
+                if (!getChildViewHolderInt(view).shouldIgnore()) { // 没有被标记为ignore
                     removeAndRecycleViewAt(i, recycler);
                 }
             }

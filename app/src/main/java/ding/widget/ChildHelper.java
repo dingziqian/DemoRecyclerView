@@ -65,6 +65,8 @@ import java.util.List;
  *     [2] A,D,G,F
  * addView传输的index是2, 经过ChildHelper转化，最后偏移为4插入到了RecyclerView中。
  *
+ * http://blog.csdn.net/fyfcauc/article/details/54175072
+ *
  */
 class ChildHelper {
 
