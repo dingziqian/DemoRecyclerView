@@ -24,9 +24,6 @@ import android.support.annotation.RestrictTo;
 import android.support.v4.view.ViewCompat;
 import android.support.v4.view.accessibility.AccessibilityEventCompat;
 import android.support.v4.view.accessibility.AccessibilityRecordCompat;
-
-import ding.widget.RecyclerView.LayoutParams;
-import ding.widget.helper.ItemTouchHelper;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
@@ -34,6 +31,9 @@ import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityEvent;
 
 import java.util.List;
+
+import ding.widget.RecyclerView.LayoutParams;
+import ding.widget.helper.ItemTouchHelper;
 
 import static android.support.annotation.RestrictTo.Scope.GROUP_ID;
 import static ding.widget.RecyclerView.NO_POSITION;
@@ -1959,9 +1959,8 @@ public class LinearLayoutManager extends RecyclerView.LayoutManager implements
     static class LayoutState {
 
         final static String TAG = "LLM#LayoutState";
-
+        //方向
         final static int LAYOUT_START = -1;
-
         final static int LAYOUT_END = 1;
 
         final static int INVALID_LAYOUT = Integer.MIN_VALUE;
@@ -1973,38 +1972,45 @@ public class LinearLayoutManager extends RecyclerView.LayoutManager implements
         final static int SCROLLING_OFFSET_NaN = Integer.MIN_VALUE;
 
         /**
+         *
          * We may not want to recycle children in some cases (e.g. layout)
          */
         boolean mRecycle = true;
 
         /**
+         * 布局开始的地方，会随着不断布局子View更新
          * Pixel offset where layout should start
          */
         int mOffset;
 
         /**
+         * 在布局方向上还需布局的距离（Pixels）
          * Number of pixels that we should fill, in the layout direction.
          */
         int mAvailable;
 
         /**
+         * 下一个数据在数据集中的position
          * Current position on the adapter to get the next item.
          */
         int mCurrentPosition;
 
         /**
+         * 数据集遍历的方向
          * Defines the direction in which the data adapter is traversed.
          * Should be {@link #ITEM_DIRECTION_HEAD} or {@link #ITEM_DIRECTION_TAIL}
          */
         int mItemDirection;
 
         /**
+         * 这次layout的方向
          * Defines the direction in which the layout is filled.
          * Should be {@link #LAYOUT_START} or {@link #LAYOUT_END}
          */
         int mLayoutDirection;
 
         /**
+         * 在scrolling状态下被构造，代表不创建新View的情况下可以滑动多少距离
          * Used when LayoutState is constructed in a scrolling state.
          * It should be set the amount of scrolling we can make without creating a new view.
          * Settings this is required for efficient view recycling.
@@ -2012,6 +2018,7 @@ public class LinearLayoutManager extends RecyclerView.LayoutManager implements
         int mScrollingOffset;
 
         /**
+         * 用于prelayout
          * Used if you want to pre-layout items that are not yet visible.
          * The difference with {@link #mAvailable} is that, when recycling, distance laid out for
          * {@link #mExtra} is not considered to avoid recycling visible children.
@@ -2026,12 +2033,14 @@ public class LinearLayoutManager extends RecyclerView.LayoutManager implements
         boolean mIsPreLayout = false;
 
         /**
+         * 上一次滑动的距离
          * The most recent {@link #scrollBy(int, RecyclerView.Recycler, RecyclerView.State)}
          * amount.
          */
         int mLastScrollDelta;
 
         /**
+         * 用于LLM想布局特殊的View，从这个List获取
          * When LLM needs to layout particular views, it sets this list in which case, LayoutState
          * will only return views from this list and return null if it cannot find an item.
          */
@@ -2043,6 +2052,7 @@ public class LinearLayoutManager extends RecyclerView.LayoutManager implements
         boolean mInfinite;
 
         /**
+         * 数据集中是否还有更多数据
          * @return true if there are more items in the data adapter
          */
         boolean hasMore(RecyclerView.State state) {
@@ -2050,6 +2060,7 @@ public class LinearLayoutManager extends RecyclerView.LayoutManager implements
         }
 
         /**
+         * 很关键的方法，向Recycler索取一个View，由于解耦得非常好，所以这里我们只需要理解为能根据mCurrentPosition和ViewType获取一个View就可以，至于怎么获得，在下一篇再说
          * Gets the view for the next element that we should layout.
          * Also updates current item index to the next item, based on {@link #mItemDirection}
          *

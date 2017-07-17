@@ -2938,6 +2938,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
             final int heightMode = MeasureSpec.getMode(heightSpec);
             final boolean skipMeasure = widthMode == MeasureSpec.EXACTLY
                     && heightMode == MeasureSpec.EXACTLY;
+            // 把宽高先设置成了EXACTLY模式下的宽高
             mLayout.onMeasure(mRecycler, mState, widthSpec, heightSpec);
             if (skipMeasure || mAdapter == null) { // 如果宽度和高度都确定的情况下，就直接调用defaultOnMeasure
                 return;
@@ -9906,7 +9907,8 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
          */
         static final int FLAG_MOVED = 1 << 11;
 
-        /**当ViewHolder出现在pre-layout的时候，在ItemAnimator当中使用
+        /**
+         * 当ViewHolder出现在pre-layout的时候，在ItemAnimator当中使用
          * Used by ItemAnimator when a ViewHolder appears in pre-layout
          */
         static final int FLAG_APPEARED_IN_PRE_LAYOUT = 1 << 12;
@@ -11095,6 +11097,11 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
                 });
     }
     /**
+     * 包含了当前RecyclerView状态的有用信息，包括滚动的最终位置或者焦点等,也可以保留任何数据，由resource id 来标示
+     * 通常情况下，RecyclerView组件需要相互传递信息。为了在组件之间提供良好定义的数据总线，
+     * RecyclerView将相同的状态对象传递给组件回调，这些组件可以使用它来交换数据。
+     * 如果您实现自定义组件，则可以使用State的 put/get/remove方法在组件之间传递数据，而无需管理其生命周期
+     *
      * <p>Contains useful information about the current RecyclerView state like target scroll
      * position or view focus. State object can also keep arbitrary data, identified by resource
      * ids.</p>
@@ -11122,40 +11129,45 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         })
         @Retention(RetentionPolicy.SOURCE)
         @interface LayoutState {}
-
+        // 如果在滑动，记录的是重点position
         private int mTargetPosition = RecyclerView.NO_POSITION;
 
+        // 当前处于哪个Layout阶段，还有STEP_LAYOUT，STEP_ANIMATIONS，从名字也可以看出，第二个阶段是真正布局的阶段
         @LayoutState
         int mLayoutStep = STEP_START;
 
         private SparseArray<Object> mData;
 
         /**
+         * 对应于RecyclerView中Item的数量
+         * 和LayoutManager中的getItemCount返回的数量不太一样，LM返回的数量一定是数据集的数量
          * Number of items adapter has.
          */
         int mItemCount = 0;
 
         /**
+         * 上一次Layout后Item的数量（因为Layout后数据集中的数据就和界面同步了）
          * Number of items adapter had in the previous layout.
          */
         int mPreviousLayoutItemCount = 0;
 
         /**
+         * 在prelayout阶段从adpter中删除的item的数量
          * Number of items that were NOT laid out but has been deleted from the adapter after the
          * previous layout.
          */
         int mDeletedInvisibleItemCountSincePreviousLayout = 0;
-
+        // 是否有结构变化（指增删，更新不算）
         boolean mStructureChanged = false;
-
+        // 是否在prelayout阶段
         boolean mInPreLayout = false;
-
+        // 支持的动画模式
         boolean mRunSimpleAnimations = false;
 
         boolean mRunPredictiveAnimations = false;
 
         boolean mTrackOldChangeHolders = false;
-
+        // 是否正在测量中
         boolean mIsMeasuring = false;
 
         /**
